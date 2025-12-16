@@ -20,16 +20,8 @@ def insert_update_player_data(**context):
     else:
         logging.warning("nie znaleziono zawodnika.")
 
-def insert_update_team_data(**context):
-    team_json = context["ti"].xcom_pull(task_ids = "api_team_query")
-
-    if team_json:
-        upsert_team_data(team_json)
-    else:
-        logging.warning("Nie znaleziono drużyny")
-
 @dag(schedule = None)
-def recurring_sport_api_insert_update_dag():
+def recurring_player_api_insert_update_dag():
     api_health_check_task = HttpOperator(
         task_id = "check_api_health_check_endpoint",
         http_conn_id = "sportsworldcentral_url",
@@ -43,7 +35,7 @@ def recurring_sport_api_insert_update_dag():
     api_player_query_task = HttpOperator(
         task_id = "api_player_query",
         http_conn_id = "sportsworldcentral_url",
-        endpoint = ("/v0/players/?skip=0&limit=100000&minimum_last_changed_date={{ ds }}"),
+        endpoint = ("/v0/players/?skip/0&limit=100000&minimum_last_changed_date={{ ds }}"),
         method = "GET",
         headers = {"Content-Type": "application/json"}
     )
@@ -53,21 +45,6 @@ def recurring_sport_api_insert_update_dag():
         python_callable = insert_update_player_data
     )
 
-    api_team_query_task = HttpOperator(
-        task_id = "api_team_query",
-        http_conn_id = "sportsworldcentral_url",
-        endpoint = ("/v0/teams/?skip=0&limit=1000&minimum_last_changed_date=2024-04-01"),
-        method = "GET",
-        headers = {"Content-Type": "application/json"}
-    )
+    api_health_check_task >> api_player_query_task >> player_sqlite_upsert_task
 
-    team_sqlite_upsert_task = PythonOperator(
-        task_id = "team_sqlite_upsert",
-        python_callable = insert_update_team_data
-    )
-
-    api_health_check_task >> [api_player_query_task, api_team_query_task]
-    api_player_query_task >> player_sqlite_upsert_task
-    api_team_query_task >> team_sqlite_upsert_task
-
-dag_instance = recurring_sport_api_insert_update_dag()
+dag_instance = recurring_player_api_insert_update_dag()
