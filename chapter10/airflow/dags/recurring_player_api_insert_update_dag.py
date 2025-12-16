@@ -3,7 +3,7 @@ import logging
 from airflow.decorators import dag
 from airflow.providers.http.operators.http import HttpOperator
 from airflow.operators.python import PythonOperator
-from shared_functions import upsert_player_data, upsert_team_data
+from shared_functions import upsert_player_data, upsert_team_data, upsert_league_data
 
 def health_check_response(response):
     logging.info(f"Kod stanu odpowiedzi: {response.status_code}")
@@ -27,6 +27,14 @@ def insert_update_team_data(**context):
         upsert_team_data(team_json)
     else:
         logging.warning("Nie znaleziono drużyny")
+
+def insert_update_league_data(**context):
+    league_json = context["ti"].xcom_pull(task_ids = "api_league_query")
+
+    if league_json:
+        upsert_league_data(league_json)
+    else:
+        logging.warning("Nie znaleziono ligi")
 
 @dag(schedule = None)
 def recurring_sport_api_insert_update_dag():
@@ -56,7 +64,7 @@ def recurring_sport_api_insert_update_dag():
     api_team_query_task = HttpOperator(
         task_id = "api_team_query",
         http_conn_id = "sportsworldcentral_url",
-        endpoint = ("/v0/teams/?skip=0&limit=1000&minimum_last_changed_date=2024-04-01"),
+        endpoint = ("/v0/teams/?skip=0&limit=1000&minimum_last_changed_date={{ ds }}"),
         method = "GET",
         headers = {"Content-Type": "application/json"}
     )
@@ -66,8 +74,22 @@ def recurring_sport_api_insert_update_dag():
         python_callable = insert_update_team_data
     )
 
-    api_health_check_task >> [api_player_query_task, api_team_query_task]
+    api_league_query_task = HttpOperator(
+        task_id = "api_league_query",
+        http_conn_id = "sportsworldcentral_url",
+        endpoint = ("/v0/leagues/?skip=0&limit=1000&minimum_last_changed_date={{ ds }}"),
+        method="GET",
+        headers = {"Content-Type": "application/json"}
+    )
+
+    league_sqlite_upsert_task = PythonOperator(
+        task_id = "league_sqlite_query",
+        python_callable = insert_update_league_data
+    )
+
+    api_health_check_task >> [api_player_query_task, api_team_query_task, api_league_query_task]
     api_player_query_task >> player_sqlite_upsert_task
     api_team_query_task >> team_sqlite_upsert_task
+    api_league_query_task >> league_sqlite_upsert_task
 
 dag_instance = recurring_sport_api_insert_update_dag()

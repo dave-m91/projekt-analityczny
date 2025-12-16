@@ -65,9 +65,9 @@ def upsert_team_data(team_json):
                                    last_changed_date)
                                    VALUES (?, ?, ?, ?)
                                    ON CONFLICT(league_id) DO UPDATE
-                                   SET team_id excluded.team_id,
-                                   team_name excluded.team_name,
-                                   last_changed_date excluded.last_changed_date""",
+                                   SET team_id = excluded.team_id,
+                                   team_name = excluded.team_name,
+                                   last_changed_date = excluded.last_changed_date""",
                                    (team["league_id"],
                                     team["team_id"],
                                     team["team_name"],
@@ -78,3 +78,41 @@ def upsert_team_data(team_json):
     else:
         logging.warning("Nie znaleziono danych drużyny")
         raise ValueError("Nie znaleziono danych drużyny. Zadanie nie powiodło się z powodu braku danych")
+    
+
+def upsert_league_data(league_json):
+    import sqlite3
+    import pandas as pd
+    database_conn_id = "analytics_database"
+    connection = BaseHook.get_connection(database_conn_id)
+    sqlite_db_path = connection.schema
+    if league_json:
+        league_data = json.loads(league_json)
+        with sqlite3.connect(sqlite_db_path) as conn:
+            cursor = conn.cursor()
+            for league in league_data:
+                try:
+                    cursor.execute("""
+                                    INSERT INTO league (
+                                   league_id,
+                                   league_name,
+                                   scoring_type,
+                                   league_size,
+                                   last_changed_date)
+                                   VALUES (?, ?, ?, ?, ?)
+                                   ON CONFLICT(league_id) DO UPDATE
+                                   SET league_name = excluded.league_name,
+                                   scoring_type = excluded.scoring_type,
+                                   league_size = excluded.league_size,
+                                   last_changed_date = excluded.last_changed_date""",
+                                   (league["league_id"],
+                                    league["league_name"],
+                                    league["scoring_type"],
+                                    league["league_size"],
+                                    league["last_changed_date"]))
+                except Exception as e:
+                    logging.error(f"Nie udało się wstawić danych ligi {league['league_id']}: {e}")
+                    raise
+    else:
+        logging.warning("Nie znaleziono danych ligi")
+        raise ValueError("Nie znaleziono danych ligi. Zadanie nie powiodło się z powodu braku danych")
