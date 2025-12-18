@@ -1,2 +1,2 @@
-# api-book-part-two
-Source code for Part 2 of Hands on APIs for AI and Data Science
+Projekt przedstawia połączenie bazy sqlite z danymi fantasy football z fastapi.
+Następnie dane przekazywane są do apliakacji Streamlit w celu wizualizacji danych
