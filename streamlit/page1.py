@@ -8,10 +8,16 @@ logger = logging.getLogger(__name__) # odwołanie do pliku logu
 st.header("Aplikacja SportsWolrdCentral")
 st.subheader("Składy drużyn")
 
+
 base_url = st.session_state["base_url"]
+# wdrożenie buforowania
+@st.cache_data(ttl=600, show_spinner="Pobieranie danych z API...")
+def get_teams_from_api(url, endpoint):
+    logger.info(f"Pobieranie danych z: {url}{endpoint}")
+    return swc.call_api_endpoint(url, endpoint)
 
 try:
-    team_api_response = swc.call_api_endpoint(base_url, swc.LIST_TEAMS_ENDPOINT) # wywołanie api
+    team_api_response = get_teams_from_api(base_url, swc.LIST_TEAMS_ENDPOINT) # wywołanie api
 
     if team_api_response.status_code == 200:
         team_data = team_api_response.json()
@@ -28,6 +34,10 @@ try:
         st.sidebar.divider()
         st.sidebar.subheader(":blue[Źródła danych]")
         st.sidebar.text("SportsWorldCentral")
+
+        if st.sidebar.button("Odśwież dane"):
+            st.cache_data.clear()
+            st.rerun()
 
         flat_team_df = pd.json_normalize(
             team_data, "players", ["team_id", "team_name", "league_id"]
